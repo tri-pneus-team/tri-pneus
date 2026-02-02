@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>TRI PNEUS — Recherche Vocale</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700;800&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0e1a;
+  --surface: #131829;
+  --surface2: #1a2035;
+  --border: #2a3055;
+  --text: #e8ecf5;
+  --text-dim: #7a84a0;
+  --accent: #4a7cff;
+  --accent-glow: rgba(74,124,255,0.3);
+  --green: #22c55e;
+  --green-bg: rgba(34,197,94,0.12);
+  --green-border: rgba(34,197,94,0.3);
+  --red: #ef4444;
+  --red-bg: rgba(239,68,68,0.12);
+  --red-border: rgba(239,68,68,0.3);
+  --orange: #f59e0b;
+  --orange-bg: rgba(245,158,11,0.12);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100dvh;
+  overflow-x: hidden;
+}
+
+.app {
+  max-width: 500px;
+  margin: 0 auto;
+  padding: 16px;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Header */
+.header {
+  text-align: center;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 16px;
+}
+.header h1 {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 20px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.header p {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-top: 4px;
+}
+
+/* Search bar manual */
+.search-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.search-bar input {
+  flex: 1;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 16px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 18px;
+  font-weight: 700;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.search-bar input::placeholder {
+  color: var(--text-dim);
+  font-weight: 400;
+  font-size: 14px;
+}
+.search-bar input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+.search-btn {
+  background: var(--accent);
+  border: none;
+  border-radius: 12px;
+  padding: 0 20px;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+.search-btn:active { transform: scale(0.95); }
+
+/* Mic button */
+.mic-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 8px 0 20px;
+}
+.mic-btn {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  border: 3px solid var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  position: relative;
+}
+.mic-btn svg { width: 36px; height: 36px; }
+.mic-btn.listening {
+  border-color: var(--red);
+  background: var(--red-bg);
+  color: var(--red);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+.mic-btn.processing {
+  border-color: var(--orange);
+  background: var(--orange-bg);
+  color: var(--orange);
+}
+@keyframes pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+  50% { box-shadow: 0 0 0 18px rgba(239,68,68,0); }
+}
+.mic-label {
+  margin-top: 10px;
+  font-size: 13px;
+  color: var(--text-dim);
+  text-align: center;
+  min-height: 20px;
+}
+.mic-label.active { color: var(--red); font-weight: 500; }
+
+/* Result area */
+.result {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.result-card {
+  background: var(--surface);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  overflow: hidden;
+  animation: slideUp 0.3s ease-out;
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-dim {
+  padding: 16px 20px;
+  background: var(--surface2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.result-dim .dim-text {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+.result-dim .badge {
+  font-size: 12px;
+  font-weight: 700;
+  padding: 4px 12px;
+  border-radius: 20px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+.badge.found {
+  background: var(--green-bg);
+  color: var(--green);
+  border: 1px solid var(--green-border);
+}
+.badge.notfound {
+  background: var(--red-bg);
+  color: var(--red);
+  border: 1px solid var(--red-border);
+}
+
+.result-body { padding: 16px 20px; }
+
+.client-list { list-style: none; }
+.client-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.client-item:last-child { border-bottom: none; }
+.client-check {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--green-bg);
+  border: 1px solid var(--green-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--green);
+  font-size: 16px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+.client-name {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.no-result {
+  text-align: center;
+  padding: 30px 20px;
+}
+.no-result .icon { font-size: 40px; margin-bottom: 12px; }
+.no-result .msg {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--red);
+}
+.no-result .sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin-top: 6px;
+}
+
+/* Suggestions on fuzzy match */
+.suggestions {
+  margin-top: 16px;
+}
+.suggestions h3 {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+.suggestion-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.chip {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chip:active {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+/* History */
+.history {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.history h3 {
+  font-size: 11px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 1.5px;
+  margin-bottom: 8px;
+}
+.history-list { list-style: none; }
+.history-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 2px;
+}
+.history-item:active { background: var(--surface2); }
+.history-dim {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 14px;
+  font-weight: 700;
+}
+.history-result {
+  font-size: 12px;
+  font-weight: 500;
+}
+.history-result.yes { color: var(--green); }
+.history-result.no { color: var(--red); }
+
+/* Unsupported speech */
+.speech-unsupported {
+  background: var(--orange-bg);
+  border: 1px solid rgba(245,158,11,0.3);
+  border-radius: 12px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: var(--orange);
+  text-align: center;
+  margin-bottom: 16px;
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 16px 0 8px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <h1>🔍 Tri Pneus</h1>
+    <p>Annonce une dimension — vocal ou clavier</p>
+  </div>
+
+  <div class="search-bar">
+    <input type="text" id="searchInput" placeholder="Ex: 225/70/16" inputmode="text" autocomplete="off">
+    <button class="search-btn" onclick="searchFromInput()">OK</button>
+  </div>
+
+  <div class="mic-section">
+    <button class="mic-btn" id="micBtn" onclick="toggleVoice()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+        <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+        <line x1="12" y1="19" x2="12" y2="23"/>
+        <line x1="8" y1="23" x2="16" y2="23"/>
+      </svg>
+    </button>
+    <div class="mic-label" id="micLabel">Appuyer pour parler</div>
+  </div>
+
+  <div class="result" id="resultArea"></div>
+
+  <div class="history" id="historySection" style="display:none">
+    <h3>Historique</h3>
+    <ul class="history-list" id="historyList"></ul>
+  </div>
+
+  <div class="footer">Guide de tri pneus — données hors-ligne</div>
+</div>
+
+<script>
+// ============ DATABASE ============
+const DB = {
+"145/70/13": ["COTE D'IVOIRE","MAMA"],
+"155/70/13": ["COTE D'IVOIRE","MAMA","OLATOUTOU"],
+"155/80/13": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"165/70/13": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"175/70/13": ["COTE D'IVOIRE","MAMA","SENEGAL BK"],
+"165/65/13": ["OLATOUTOU"],
+"175/65/13": ["OLATOUTOU"],
+"165/80/13": ["SENEGAL MA-NIANG"],
+"175/*/14": ["COTE D'IVOIRE","MAMA"],
+"185/*/14": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE"],
+"195/*/14": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE"],
+"155/65/14": ["MAMA"],
+"165/65/14": ["MAMA"],
+"165/70/14": ["COTE D'IVOIRE","MAMA","SENEGAL BK"],
+"175/65/14": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"175/70/14": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"175/80/14": ["COTE D'IVOIRE","SENEGAL MA-NIANG"],
+"185/60/14": ["COTE D'IVOIRE","MAMA","SENEGAL BK","SENEGAL MA-NIANG"],
+"185/65/14": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"185/70/14": ["COTE D'IVOIRE","OLATOUTOU"],
+"185/80/14": ["OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"195/80/14": ["OLATOUTOU","SENEGAL BK"],
+"205/80/14": ["OLATOUTOU"],
+"215/*/14": ["MAMA"],
+"185/60/15": ["MAMA"],
+"185/65/15": ["COTE D'IVOIRE","MAMA","SENEGAL BK","SENEGAL MA-NIANG"],
+"195/65/15": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"195/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK"],
+"195/80/15": ["MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"205/65/15": ["COTE D'IVOIRE","MAMA","OLATOUTOU"],
+"205/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","SENEGAL BK","SENEGAL MA-NIANG"],
+"215/65/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE"],
+"215/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"215/75/15": ["MAMA","MARIO AFRIQUE"],
+"225/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"225/75/15": ["MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"235/60/15": ["MAMA"],
+"235/70/15": ["MAMA","MARIO AFRIQUE","SENEGAL MA-NIANG"],
+"235/75/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE"],
+"255/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"265/70/15": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"31/10,5/15": ["MARIO AFRIQUE"],
+"195/75/16": ["MAMA"],
+"205/55/16": ["COTE D'IVOIRE","MAMA","SENEGAL BK","SENEGAL MA-NIANG"],
+"205/60/16": ["MAMA","SENEGAL BK","SENEGAL MA-NIANG"],
+"205/65/16": ["COTE D'IVOIRE","OLATOUTOU","SENEGAL MA-NIANG"],
+"205/75/16": ["MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"205/80/16": ["MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"205/*/16": ["MARIO AFRIQUE"],
+"215/65/16": ["COTE D'IVOIRE","OLATOUTOU","SENEGAL MA-NIANG"],
+"215/70/16": ["OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"215/75/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"225/65/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"225/70/16": ["OLATOUTOU"],
+"225/75/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"235/65/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"235/70/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"235/75/16": ["MAMA"],
+"235/85/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE"],
+"245/70/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK"],
+"245/75/16": ["MAMA","MARIO AFRIQUE"],
+"255/65/16": ["MARIO AFRIQUE"],
+"255/70/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"255/75/16": ["MAMA"],
+"265/70/16": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"265/75/16": ["MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"275/70/16": ["MAMA","MARIO AFRIQUE","OLATOUTOU"],
+"275/75/16": ["MAMA"],
+"285/75/16": ["MAMA"],
+"215/50/17": ["MAMA"],
+"215/55/17": ["COTE D'IVOIRE","OLATOUTOU"],
+"215/65/17": ["MAMA"],
+"225/45/17": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL MA-NIANG"],
+"225/50/17": ["COTE D'IVOIRE","OLATOUTOU"],
+"225/55/17": ["OLATOUTOU"],
+"225/60/17": ["OLATOUTOU"],
+"225/65/17": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"225/70/17": ["MAMA"],
+"235/50/17": ["SENEGAL MA-NIANG"],
+"235/60/17": ["SENEGAL BK","SENEGAL MA-NIANG"],
+"235/65/17": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"235/80/17": ["MAMA"],
+"245/65/17": ["MAMA","OLATOUTOU"],
+"245/70/17": ["MAMA"],
+"245/75/17": ["MAMA"],
+"255/65/17": ["MAMA"],
+"265/65/17": ["COTE D'IVOIRE","MAMA","MARIO AFRIQUE","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"265/70/17": ["MARIO AFRIQUE"],
+"225/40/18": ["COTE D'IVOIRE"],
+"225/45/18": ["COTE D'IVOIRE"],
+"235/55/18": ["MAMA"],
+"235/60/18": ["COTE D'IVOIRE","MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"245/45/18": ["OLATOUTOU"],
+"245/50/18": ["OLATOUTOU"],
+"245/60/18": ["OLATOUTOU"],
+"265/60/18": ["MAMA","MARIO AFRIQUE"],
+"275/65/18": ["OLATOUTOU"],
+"285/65/18": ["OLATOUTOU"],
+"245/45/19": ["SENEGAL BK","SENEGAL MA-NIANG"],
+"245/50/19": ["OLATOUTOU"],
+"255/50/19": ["MAMA","OLATOUTOU"],
+"255/55/19": ["MAMA","OLATOUTOU","SENEGAL BK","SENEGAL MA-NIANG"],
+"265/55/19": ["MAMA"],
+"245/50/20": ["OLATOUTOU"],
+"255/40/20": ["SENEGAL MA-NIANG"],
+"255/50/20": ["SENEGAL BK"],
+"255/55/20": ["OLATOUTOU","SENEGAL BK"],
+"265/50/20": ["MARIO AFRIQUE"],
+"275/45/20": ["MARIO AFRIQUE","SENEGAL BK","SENEGAL MA-NIANG"],
+"275/50/20": ["OLATOUTOU"],
+"275/55/20": ["MARIO AFRIQUE","OLATOUTOU"],
+"275/60/20": ["MARIO AFRIQUE"],
+"285/50/20": ["MARIO AFRIQUE"],
+"285/55/20": ["MARIO AFRIQUE"],
+"295/35/21": ["MARIO AFRIQUE"]
+};
+
+const SHORT = {"COTE D'IVOIRE":"CDI","MAMA":"MAMA","MARIO AFRIQUE":"MARIO","OLATOUTOU":"OLAT","SENEGAL BK":"SEN-BK","SENEGAL MA-NIANG":"SEN-MN"};
+const ALL_DIMS = Object.keys(DB);
+const history = [];
+
+// ============ SPEECH ============
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let isListening = false;
+let speechSupported = !!SpeechRecognition;
+
+if (speechSupported) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'fr-FR';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+    setMicState('processing');
+    setMicLabel('Entendu : ' + text);
+    setTimeout(() => processVoice(text), 300);
+  };
+  recognition.onerror = (e) => {
+    setMicState('idle');
+    if (e.error === 'no-speech') setMicLabel('Rien entendu, réessaie');
+    else setMicLabel('Erreur — réessaie');
+  };
+  recognition.onend = () => {
+    if (isListening) { isListening = false; }
+    setTimeout(() => setMicState('idle'), 500);
+  };
+} else {
+  document.querySelector('.mic-section').innerHTML =
+    '<div class="speech-unsupported">⚠️ Reconnaissance vocale non supportée sur ce navigateur. Utilise Chrome sur Android ou Safari sur iOS. Tu peux toujours chercher au clavier ci-dessus.</div>';
+}
+
+function toggleVoice() {
+  if (!speechSupported) return;
+  if (isListening) {
+    recognition.stop();
+    isListening = false;
+    setMicState('idle');
+    setMicLabel('Appuyer pour parler');
+  } else {
+    try {
+      recognition.start();
+      isListening = true;
+      setMicState('listening');
+      setMicLabel('🎙️ Parle maintenant...');
+    } catch(e) {
+      setMicLabel('Erreur micro — vérifie les permissions');
+    }
+  }
+}
+
+function setMicState(state) {
+  const btn = document.getElementById('micBtn');
+  if (!btn) return;
+  btn.classList.remove('listening','processing');
+  if (state !== 'idle') btn.classList.add(state);
+}
+
+function setMicLabel(txt) {
+  const el = document.getElementById('micLabel');
+  if (el) {
+    el.textContent = txt;
+    el.classList.toggle('active', txt.includes('Parle'));
+  }
+}
+
+// ============ VOICE PARSING ============
+function processVoice(text) {
+  // Normalize: "225 70 16", "225/70/16", "225 barre 70 barre 16", "deux cent vingt cinq..."
+  let clean = text.toLowerCase().trim()
+    .replace(/slash|barre|sur|par/g, '/')
+    .replace(/\s+\/\s+/g, '/')
+    .replace(/[^\d\/\*,\.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Try to extract 3 numbers separated by spaces or slashes
+  let match = clean.match(/(\d{2,3})\s*[\/\s]\s*(\d{1,3}|\*)\s*[\/\s]\s*(\d{2})/);
+  if (match) {
+    const dim = match[1] + '/' + match[2] + '/' + match[3];
+    searchDimension(dim);
+    return;
+  }
+
+  // Try just numbers in sequence
+  let nums = clean.match(/\d+/g);
+  if (nums && nums.length >= 3) {
+    const dim = nums[0] + '/' + nums[1] + '/' + nums[2];
+    searchDimension(dim);
+    return;
+  }
+
+  // Failed to parse
+  showResult(null, text);
+  speak("Je n'ai pas compris la dimension. Réessaie.");
+  setMicLabel('Pas compris — réessaie');
+}
+
+// ============ SEARCH ============
+function searchFromInput() {
+  const val = document.getElementById('searchInput').value.trim();
+  if (!val) return;
+  // Normalize input
+  let clean = val.replace(/\s+/g, '/').replace(/[^0-9\/\*,\.]/g, '');
+  // Ensure format
+  let parts = clean.split('/').filter(p => p);
+  if (parts.length === 3) {
+    searchDimension(parts.join('/'));
+  } else {
+    // Try fuzzy
+    searchDimension(clean);
+  }
+}
+
+function searchDimension(dim) {
+  document.getElementById('searchInput').value = dim;
+
+  // Exact match
+  if (DB[dim]) {
+    showResult(dim, null);
+    const clients = DB[dim];
+    const names = clients.map(c => SHORT[c] || c).join(', ');
+    speak(dim.replace(/\//g, ' ') + '. ' + clients.length + ' client' + (clients.length > 1 ? 's' : '') + ': ' + names);
+    addHistory(dim, true, clients.length);
+    return;
+  }
+
+  // Check wildcard matches (e.g., 185/60/14 matches 185/*/14)
+  let parts = dim.split('/');
+  let wildcardMatches = [];
+  if (parts.length === 3) {
+    let wildcard = parts[0] + '/*/' + parts[2];
+    if (DB[wildcard]) {
+      wildcardMatches.push({ dim: wildcard, clients: DB[wildcard] });
+    }
+  }
+
+  if (wildcardMatches.length > 0) {
+    // Show as found via wildcard
+    const wm = wildcardMatches[0];
+    showResult(dim, null, wm);
+    const names = wm.clients.map(c => SHORT[c] || c).join(', ');
+    speak(dim.replace(/\//g, ' ') + '. Correspond à ' + wm.dim.replace(/\//g, ' ') + '. ' + wm.clients.length + ' client' + (wm.clients.length > 1 ? 's' : '') + ': ' + names);
+    addHistory(dim, true, wm.clients.length);
+    return;
+  }
+
+  // Fuzzy: find close dimensions (same rim)
+  let suggestions = [];
+  if (parts.length === 3) {
+    suggestions = ALL_DIMS.filter(d => {
+      let dp = d.split('/');
+      return dp[2] === parts[2] && dp[0] === parts[0] && dp[1] !== '*';
+    });
+    if (suggestions.length === 0) {
+      suggestions = ALL_DIMS.filter(d => d.split('/')[2] === parts[2] && !d.includes('*')).slice(0, 8);
+    }
+  }
+
+  showResult(null, dim, null, suggestions);
+  speak(dim.replace(/\//g, ' ') + ". Personne ne prend cette dimension.");
+  addHistory(dim, false, 0);
+}
+
+// ============ DISPLAY ============
+function showResult(foundDim, queryText, wildcardMatch, suggestions) {
+  const area = document.getElementById('resultArea');
+
+  if (foundDim && DB[foundDim]) {
+    const clients = DB[foundDim];
+    area.innerHTML = `
+      <div class="result-card">
+        <div class="result-dim">
+          <span class="dim-text">${foundDim}</span>
+          <span class="badge found">${clients.length} client${clients.length>1?'s':''}</span>
+        </div>
+        <div class="result-body">
+          <ul class="client-list">
+            ${clients.map(c => `<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}
+          </ul>
+        </div>
+      </div>`;
+    return;
+  }
+
+  if (wildcardMatch) {
+    const wm = wildcardMatch;
+    area.innerHTML = `
+      <div class="result-card">
+        <div class="result-dim">
+          <span class="dim-text">${queryText || wm.dim}</span>
+          <span class="badge found">${wm.clients.length} client${wm.clients.length>1?'s':''}</span>
+        </div>
+        <div class="result-body">
+          <div style="font-size:12px;color:var(--orange);margin-bottom:12px;">↳ via ${wm.dim} (toutes séries)</div>
+          <ul class="client-list">
+            ${wm.clients.map(c => `<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}
+          </ul>
+        </div>
+      </div>`;
+    return;
+  }
+
+  // Not found
+  let suggestHTML = '';
+  if (suggestions && suggestions.length > 0) {
+    suggestHTML = `<div class="suggestions"><h3>Dimensions proches</h3><div class="suggestion-chips">${suggestions.map(s => `<div class="chip" onclick="searchDimension('${s}')">${s}</div>`).join('')}</div></div>`;
+  }
+  area.innerHTML = `
+    <div class="result-card">
+      <div class="result-dim">
+        <span class="dim-text">${queryText || '???'}</span>
+        <span class="badge notfound">Aucun</span>
+      </div>
+      <div class="result-body">
+        <div class="no-result">
+          <div class="icon">✕</div>
+          <div class="msg">Personne ne prend cette dimension</div>
+          <div class="sub">Vérifier ou mettre en déchet</div>
+        </div>
+        ${suggestHTML}
+      </div>
+    </div>`;
+}
+
+// ============ SPEECH SYNTHESIS ============
+function speak(text) {
+  if (!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'fr-FR';
+  utter.rate = 1.05;
+  utter.pitch = 1;
+  // Try to pick a French voice
+  const voices = window.speechSynthesis.getVoices();
+  const frVoice = voices.find(v => v.lang.startsWith('fr'));
+  if (frVoice) utter.voice = frVoice;
+  window.speechSynthesis.speak(utter);
+}
+// Preload voices
+if ('speechSynthesis' in window) {
+  speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices();
+}
+
+// ============ HISTORY ============
+function addHistory(dim, found, nbClients) {
+  history.unshift({ dim, found, nbClients });
+  if (history.length > 15) history.pop();
+  renderHistory();
+}
+
+function renderHistory() {
+  const section = document.getElementById('historySection');
+  const list = document.getElementById('historyList');
+  if (history.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = history.map(h => `
+    <li class="history-item" onclick="searchDimension('${h.dim}')">
+      <span class="history-dim">${h.dim}</span>
+      <span class="history-result ${h.found ? 'yes' : 'no'}">${h.found ? h.nbClients + ' client' + (h.nbClients>1?'s':'') : 'Aucun'}</span>
+    </li>
+  `).join('');
+}
+
+// ============ KEYBOARD ============
+document.getElementById('searchInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') searchFromInput();
+});
+</script>
+</body>
+</html>
