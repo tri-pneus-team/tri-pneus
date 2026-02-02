@@ -140,15 +140,17 @@ body {
   background: var(--green-bg);
   border: 1px solid var(--green-border);
   border-radius: 12px;
-  padding: 10px 16px;
+  padding: 12px 16px;
   margin-bottom: 16px;
   text-align: center;
   font-size: 13px;
   color: var(--green);
   font-weight: 500;
   animation: fadeIn 0.3s;
+  line-height: 1.5;
 }
 .handsfree-banner.visible { display: block; }
+.handsfree-banner strong { font-size: 15px; }
 @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
 
 .mic-section {
@@ -177,11 +179,17 @@ body {
   color: var(--red);
   animation: pulse 1.5s ease-in-out infinite;
 }
-.mic-btn.handsfree-active {
+.mic-btn.handsfree-standby {
   border-color: var(--green);
   background: var(--green-bg);
   color: var(--green);
-  animation: pulse-green 2s ease-in-out infinite;
+  animation: breathe 3s ease-in-out infinite;
+}
+.mic-btn.handsfree-heard {
+  border-color: var(--green);
+  background: var(--green-bg);
+  color: var(--green);
+  animation: pulse-green 1s ease-in-out infinite;
 }
 .mic-btn.handsfree-waiting {
   border-color: var(--orange);
@@ -196,6 +204,10 @@ body {
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
   50% { box-shadow: 0 0 0 18px rgba(239,68,68,0); }
+}
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.15); }
+  50% { box-shadow: 0 0 0 12px rgba(34,197,94,0); }
 }
 @keyframes pulse-green {
   0%, 100% { box-shadow: 0 0 0 0 rgba(34,197,94,0.4); }
@@ -259,7 +271,6 @@ body {
 }
 
 .result-body { padding: 16px 20px; }
-
 .client-list { list-style: none; }
 .client-item {
   display: flex;
@@ -351,7 +362,9 @@ body {
   </div>
 
   <div class="handsfree-banner" id="handsfreeBanner">
-    🟢 Mode mains libres — dis une dimension, je t'écoute en continu
+    🟢 Mode mains libres actif<br>
+    Dis <strong>« RECHERCHE »</strong> suivi de la dimension<br>
+    <span style="font-size:11px;opacity:0.8">Ex : « Recherche 225 70 16 »</span>
   </div>
 
   <div class="search-bar">
@@ -398,192 +411,266 @@ const SHORT={"COTE D'IVOIRE":"CDI","MAMA":"MAMA","MARIO AFRIQUE":"MARIO","OLATOU
 const ALL_DIMS=Object.keys(DB);
 const history=[];
 
-let currentMode='manual';
-let handsfreeContinuous=false;
-let isSpeaking=false;
+// ============ KEYWORD ============
+const KEYWORD = "recherche";
+// Variations that speech recognition might produce
+const KEYWORD_VARIANTS = ["recherche","recherché","rechercher","recherches","recheche","recheché"];
 
-function setMode(mode){
-  currentMode=mode;
-  document.getElementById('modeManual').classList.toggle('active',mode==='manual');
-  document.getElementById('modeHandsfree').classList.toggle('active',mode==='handsfree');
-  document.getElementById('modeHandsfree').classList.toggle('handsfree',mode==='handsfree');
-  document.getElementById('handsfreeBanner').classList.toggle('visible',mode==='handsfree');
-  stopListening();
-  handsfreeContinuous=false;
-  if(mode==='manual'){setMicLabel('Appuyer pour parler');setMicState('idle');}
-  else{setMicLabel('Appuyer pour démarrer l\'écoute continue');setMicState('idle');}
-  if(mode==='handsfree')requestWakeLock();else releaseWakeLock();
+function containsKeyword(text) {
+  const lower = text.toLowerCase();
+  return KEYWORD_VARIANTS.some(kw => lower.includes(kw));
 }
 
-const SpeechRecognition=window.SpeechRecognition||window.webkitSpeechRecognition;
-let recognition=null,isListening=false,speechSupported=!!SpeechRecognition;
-
-if(speechSupported){
-  recognition=new SpeechRecognition();
-  recognition.lang='fr-FR';
-  recognition.continuous=false;
-  recognition.interimResults=false;
-
-  recognition.onresult=(e)=>{
-    const text=e.results[0][0].transcript;
-    setMicState('processing');
-    setMicLabel('Entendu : '+text);
-    setTimeout(()=>processVoice(text),300);
-  };
-  recognition.onerror=(e)=>{
-    if(e.error==='no-speech'){
-      if(handsfreeContinuous){setMicLabel('Rien entendu... je réécoute');restartHandsfree();return;}
-      setMicLabel('Rien entendu, réessaie');
-    }else if(e.error==='aborted'){return;}
-    else{setMicLabel('Erreur — réessaie');}
-    if(!handsfreeContinuous){setMicState('idle');isListening=false;}
-  };
-  recognition.onend=()=>{
-    isListening=false;
-    if(handsfreeContinuous&&!isSpeaking)restartHandsfree();
-    else if(!handsfreeContinuous)setMicState('idle');
-  };
-}else{
-  document.querySelector('.mic-section').innerHTML='<div class="speech-unsupported">⚠️ Reconnaissance vocale non supportée. Utilise Chrome Android ou Safari iOS.</div>';
-  document.querySelector('.mode-toggle').style.display='none';
-}
-
-function micAction(){
-  if(!speechSupported)return;
-  if(currentMode==='manual')toggleManual();else toggleHandsfree();
-}
-
-function toggleManual(){
-  if(isListening){stopListening();setMicState('idle');setMicLabel('Appuyer pour parler');}
-  else{startListening();setMicState('listening');setMicLabel('🎙️ Parle maintenant...');}
-}
-
-function toggleHandsfree(){
-  if(handsfreeContinuous){
-    handsfreeContinuous=false;stopListening();setMicState('idle');
-    setMicLabel('Écoute stoppée — appuie pour reprendre');
-  }else{
-    handsfreeContinuous=true;startListening();setMicState('handsfree-active');
-    setMicLabel('🟢 Écoute continue — dis une dimension');
-    speak("Mode mains libres activé. Annonce une dimension.",true);
-  }
-}
-
-function restartHandsfree(){
-  if(!handsfreeContinuous)return;
-  setTimeout(()=>{
-    if(handsfreeContinuous&&!isSpeaking){startListening();setMicState('handsfree-active');setMicLabel('🟢 J\'écoute... dis une dimension');}
-  },400);
-}
-
-function startListening(){
-  if(isListening){try{recognition.stop();}catch(e){}}
-  try{recognition.start();isListening=true;}
-  catch(e){setTimeout(()=>{try{recognition.start();isListening=true;}catch(e2){setMicLabel('Erreur micro — réessaie');}},300);}
-}
-
-function stopListening(){try{recognition.stop();}catch(e){}isListening=false;}
-
-function setMicState(state){
-  const btn=document.getElementById('micBtn');if(!btn)return;
-  btn.classList.remove('listening','processing','handsfree-active','handsfree-waiting');
-  if(state!=='idle')btn.classList.add(state);
-}
-
-function setMicLabel(txt){
-  const el=document.getElementById('micLabel');if(!el)return;
-  el.textContent=txt;el.classList.remove('active','listening');
-  if(txt.includes('🟢'))el.classList.add('active');
-  if(txt.includes('🎙️'))el.classList.add('listening');
-}
-
-function processVoice(text){
-  let clean=text.toLowerCase().trim().replace(/slash|barre|sur|par/g,'/').replace(/\s+\/\s+/g,'/').replace(/[^\d\/\*,\.]/g,' ').replace(/\s+/g,' ').trim();
-  let match=clean.match(/(\d{2,3})\s*[\/\s]\s*(\d{1,3}|\*)\s*[\/\s]\s*(\d{2})/);
-  if(match){searchDimension(match[1]+'/'+match[2]+'/'+match[3]);return;}
-  let nums=clean.match(/\d+/g);
-  if(nums&&nums.length>=3){searchDimension(nums[0]+'/'+nums[1]+'/'+nums[2]);return;}
-  showResult(null,text);speak("Je n'ai pas compris. Réessaie.",false);setMicLabel('Pas compris — réessaie');
-}
-
-function searchFromInput(){
-  const val=document.getElementById('searchInput').value.trim();if(!val)return;
-  let clean=val.replace(/\s+/g,'/').replace(/[^0-9\/\*,\.]/g,'');
-  let parts=clean.split('/').filter(p=>p);
-  if(parts.length===3)searchDimension(parts.join('/'));else searchDimension(clean);
-}
-
-function searchDimension(dim){
-  document.getElementById('searchInput').value=dim;
-  if(DB[dim]){
-    showResult(dim,null);const clients=DB[dim];const names=clients.map(c=>SHORT[c]||c).join(', ');
-    speak(dim.replace(/\//g,' ')+'. '+clients.length+' client'+(clients.length>1?'s':'')+': '+names,false);
-    addHistory(dim,true,clients.length);return;
-  }
-  let parts=dim.split('/');
-  if(parts.length===3){
-    let wildcard=parts[0]+'/*/'+parts[2];
-    if(DB[wildcard]){
-      showResult(dim,null,{dim:wildcard,clients:DB[wildcard]});
-      const names=DB[wildcard].map(c=>SHORT[c]||c).join(', ');
-      speak(dim.replace(/\//g,' ')+'. Via '+wildcard.replace(/\//g,' ')+'. '+DB[wildcard].length+' client'+(DB[wildcard].length>1?'s':'')+': '+names,false);
-      addHistory(dim,true,DB[wildcard].length);return;
+function extractAfterKeyword(text) {
+  const lower = text.toLowerCase();
+  for (const kw of KEYWORD_VARIANTS) {
+    const idx = lower.indexOf(kw);
+    if (idx !== -1) {
+      return text.substring(idx + kw.length).trim();
     }
   }
-  let suggestions=[];
-  if(parts.length===3){
-    suggestions=ALL_DIMS.filter(d=>{let dp=d.split('/');return dp[2]===parts[2]&&dp[0]===parts[0]&&dp[1]!=='*';});
-    if(suggestions.length===0)suggestions=ALL_DIMS.filter(d=>d.split('/')[2]===parts[2]&&!d.includes('*')).slice(0,8);
-  }
-  showResult(null,dim,null,suggestions);
-  speak(dim.replace(/\//g,' ')+". Personne ne prend cette dimension.",false);
-  addHistory(dim,false,0);
+  return text;
 }
 
-function showResult(foundDim,queryText,wildcardMatch,suggestions){
-  const area=document.getElementById('resultArea');
-  if(foundDim&&DB[foundDim]){
-    const clients=DB[foundDim];
-    area.innerHTML=`<div class="result-card"><div class="result-dim"><span class="dim-text">${foundDim}</span><span class="badge found">${clients.length} client${clients.length>1?'s':''}</span></div><div class="result-body"><ul class="client-list">${clients.map(c=>`<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}</ul></div></div>`;return;
-  }
-  if(wildcardMatch){
-    const wm=wildcardMatch;
-    area.innerHTML=`<div class="result-card"><div class="result-dim"><span class="dim-text">${queryText||wm.dim}</span><span class="badge found">${wm.clients.length} client${wm.clients.length>1?'s':''}</span></div><div class="result-body"><div style="font-size:12px;color:var(--orange);margin-bottom:12px;">↳ via ${wm.dim} (toutes séries)</div><ul class="client-list">${wm.clients.map(c=>`<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}</ul></div></div>`;return;
-  }
-  let suggestHTML='';
-  if(suggestions&&suggestions.length>0){suggestHTML=`<div class="suggestions"><h3>Dimensions proches</h3><div class="suggestion-chips">${suggestions.map(s=>`<div class="chip" onclick="searchDimension('${s}')">${s}</div>`).join('')}</div></div>`;}
-  area.innerHTML=`<div class="result-card"><div class="result-dim"><span class="dim-text">${queryText||'???'}</span><span class="badge notfound">Aucun</span></div><div class="result-body"><div class="no-result"><div class="icon">✕</div><div class="msg">Personne ne prend cette dimension</div><div class="sub">Vérifier ou mettre en déchet</div></div>${suggestHTML}</div></div>`;
+// ============ MODE ============
+let currentMode = 'manual';
+let handsfreeContinuous = false;
+let isSpeaking = false;
+let ignoredCount = 0;
+
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById('modeManual').classList.toggle('active', mode === 'manual');
+  document.getElementById('modeHandsfree').classList.toggle('active', mode === 'handsfree');
+  document.getElementById('modeHandsfree').classList.toggle('handsfree', mode === 'handsfree');
+  document.getElementById('handsfreeBanner').classList.toggle('visible', mode === 'handsfree');
+  stopListening();
+  handsfreeContinuous = false;
+  ignoredCount = 0;
+  if (mode === 'manual') { setMicLabel('Appuyer pour parler'); setMicState('idle'); }
+  else { setMicLabel('Appuyer pour démarrer'); setMicState('idle'); }
+  if (mode === 'handsfree') requestWakeLock(); else releaseWakeLock();
 }
 
-function speak(text,isSystemMsg){
-  if(!('speechSynthesis' in window)){if(handsfreeContinuous)restartHandsfree();return;}
-  window.speechSynthesis.cancel();isSpeaking=true;
-  if(isListening){try{recognition.stop();}catch(e){}isListening=false;}
-  if(handsfreeContinuous){setMicState('handsfree-waiting');setMicLabel('🔊 Réponse en cours...');}
-  const utter=new SpeechSynthesisUtterance(text);utter.lang='fr-FR';utter.rate=1.1;utter.pitch=1;
-  const voices=window.speechSynthesis.getVoices();const frVoice=voices.find(v=>v.lang.startsWith('fr'));
-  if(frVoice)utter.voice=frVoice;
-  utter.onend=()=>{isSpeaking=false;if(handsfreeContinuous)restartHandsfree();};
-  utter.onerror=()=>{isSpeaking=false;if(handsfreeContinuous)restartHandsfree();};
+// ============ SPEECH RECOGNITION ============
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null, isListening = false, speechSupported = !!SpeechRecognition;
+
+if (speechSupported) {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'fr-FR';
+  recognition.continuous = false;
+  recognition.interimResults = false;
+
+  recognition.onresult = (e) => {
+    const text = e.results[0][0].transcript;
+
+    if (currentMode === 'manual') {
+      // Manual mode: process everything
+      setMicState('processing');
+      setMicLabel('Entendu : ' + text);
+      setTimeout(() => processVoice(text, false), 300);
+    } else {
+      // Handsfree mode: check for keyword
+      if (containsKeyword(text)) {
+        // Keyword detected! Extract dimension part
+        const afterKeyword = extractAfterKeyword(text);
+        ignoredCount = 0;
+        setMicState('handsfree-heard');
+        setMicLabel('✅ Entendu : ' + text);
+        setTimeout(() => processVoice(afterKeyword, true), 300);
+      } else {
+        // No keyword — ignore silently
+        ignoredCount++;
+        setMicLabel('🟢 En attente de « Recherche ... »');
+        restartHandsfree();
+      }
+    }
+  };
+
+  recognition.onerror = (e) => {
+    if (e.error === 'no-speech') {
+      if (handsfreeContinuous) { restartHandsfree(); return; }
+      setMicLabel('Rien entendu, réessaie');
+    } else if (e.error === 'aborted') { return; }
+    else { setMicLabel('Erreur — réessaie'); }
+    if (!handsfreeContinuous) { setMicState('idle'); isListening = false; }
+  };
+
+  recognition.onend = () => {
+    isListening = false;
+    if (handsfreeContinuous && !isSpeaking) restartHandsfree();
+    else if (!handsfreeContinuous) setMicState('idle');
+  };
+} else {
+  document.querySelector('.mic-section').innerHTML = '<div class="speech-unsupported">⚠️ Reconnaissance vocale non supportée. Utilise Chrome Android ou Safari iOS.</div>';
+  document.querySelector('.mode-toggle').style.display = 'none';
+}
+
+function micAction() {
+  if (!speechSupported) return;
+  if (currentMode === 'manual') toggleManual(); else toggleHandsfree();
+}
+
+function toggleManual() {
+  if (isListening) { stopListening(); setMicState('idle'); setMicLabel('Appuyer pour parler'); }
+  else { startListening(); setMicState('listening'); setMicLabel('🎙️ Parle maintenant...'); }
+}
+
+function toggleHandsfree() {
+  if (handsfreeContinuous) {
+    handsfreeContinuous = false; stopListening(); setMicState('idle');
+    setMicLabel('Écoute stoppée — appuie pour reprendre');
+    ignoredCount = 0;
+  } else {
+    handsfreeContinuous = true; ignoredCount = 0;
+    startListening(); setMicState('handsfree-standby');
+    setMicLabel('🟢 En attente de « Recherche ... »');
+    speak("Mode mains libres activé. Dis recherche suivi de la dimension.", true);
+  }
+}
+
+function restartHandsfree() {
+  if (!handsfreeContinuous) return;
+  setTimeout(() => {
+    if (handsfreeContinuous && !isSpeaking) {
+      startListening();
+      setMicState('handsfree-standby');
+      setMicLabel('🟢 En attente de « Recherche ... »');
+    }
+  }, 300);
+}
+
+function startListening() {
+  if (isListening) { try { recognition.stop(); } catch(e) {} }
+  try { recognition.start(); isListening = true; }
+  catch(e) { setTimeout(() => { try { recognition.start(); isListening = true; } catch(e2) { setMicLabel('Erreur micro — réessaie'); } }, 300); }
+}
+
+function stopListening() { try { recognition.stop(); } catch(e) {} isListening = false; }
+
+function setMicState(state) {
+  const btn = document.getElementById('micBtn'); if (!btn) return;
+  btn.classList.remove('listening','processing','handsfree-standby','handsfree-heard','handsfree-waiting');
+  if (state !== 'idle') btn.classList.add(state);
+}
+
+function setMicLabel(txt) {
+  const el = document.getElementById('micLabel'); if (!el) return;
+  el.textContent = txt; el.classList.remove('active','listening');
+  if (txt.includes('🟢') || txt.includes('✅')) el.classList.add('active');
+  if (txt.includes('🎙️')) el.classList.add('listening');
+}
+
+// ============ VOICE PARSING ============
+function processVoice(text, fromHandsfree) {
+  let clean = text.toLowerCase().trim()
+    .replace(/slash|barre|sur|par/g, '/')
+    .replace(/\s+\/\s+/g, '/')
+    .replace(/[^\d\/\*,\.]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  let match = clean.match(/(\d{2,3})\s*[\/\s]\s*(\d{1,3}|\*)\s*[\/\s]\s*(\d{2})/);
+  if (match) { searchDimension(match[1] + '/' + match[2] + '/' + match[3]); return; }
+
+  let nums = clean.match(/\d+/g);
+  if (nums && nums.length >= 3) { searchDimension(nums[0] + '/' + nums[1] + '/' + nums[2]); return; }
+
+  // Couldn't parse
+  showResult(null, text);
+  speak("Je n'ai pas compris la dimension. Réessaie.", false);
+  setMicLabel('Pas compris — réessaie');
+}
+
+// ============ SEARCH ============
+function searchFromInput() {
+  const val = document.getElementById('searchInput').value.trim(); if (!val) return;
+  let clean = val.replace(/\s+/g, '/').replace(/[^0-9\/\*,\.]/g, '');
+  let parts = clean.split('/').filter(p => p);
+  if (parts.length === 3) searchDimension(parts.join('/')); else searchDimension(clean);
+}
+
+function searchDimension(dim) {
+  document.getElementById('searchInput').value = dim;
+
+  if (DB[dim]) {
+    showResult(dim, null);
+    const clients = DB[dim]; const names = clients.map(c => SHORT[c] || c).join(', ');
+    speak(dim.replace(/\//g, ' ') + '. ' + clients.length + ' client' + (clients.length > 1 ? 's' : '') + ': ' + names, false);
+    addHistory(dim, true, clients.length); return;
+  }
+
+  let parts = dim.split('/');
+  if (parts.length === 3) {
+    let wildcard = parts[0] + '/*/' + parts[2];
+    if (DB[wildcard]) {
+      showResult(dim, null, { dim: wildcard, clients: DB[wildcard] });
+      const names = DB[wildcard].map(c => SHORT[c] || c).join(', ');
+      speak(dim.replace(/\//g, ' ') + '. Via ' + wildcard.replace(/\//g, ' ') + '. ' + DB[wildcard].length + ' client' + (DB[wildcard].length > 1 ? 's' : '') + ': ' + names, false);
+      addHistory(dim, true, DB[wildcard].length); return;
+    }
+  }
+
+  let suggestions = [];
+  if (parts.length === 3) {
+    suggestions = ALL_DIMS.filter(d => { let dp = d.split('/'); return dp[2] === parts[2] && dp[0] === parts[0] && dp[1] !== '*'; });
+    if (suggestions.length === 0) suggestions = ALL_DIMS.filter(d => d.split('/')[2] === parts[2] && !d.includes('*')).slice(0, 8);
+  }
+
+  showResult(null, dim, null, suggestions);
+  speak(dim.replace(/\//g, ' ') + ". Personne ne prend cette dimension.", false);
+  addHistory(dim, false, 0);
+}
+
+// ============ DISPLAY ============
+function showResult(foundDim, queryText, wildcardMatch, suggestions) {
+  const area = document.getElementById('resultArea');
+  if (foundDim && DB[foundDim]) {
+    const clients = DB[foundDim];
+    area.innerHTML = `<div class="result-card"><div class="result-dim"><span class="dim-text">${foundDim}</span><span class="badge found">${clients.length} client${clients.length>1?'s':''}</span></div><div class="result-body"><ul class="client-list">${clients.map(c => `<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}</ul></div></div>`; return;
+  }
+  if (wildcardMatch) {
+    const wm = wildcardMatch;
+    area.innerHTML = `<div class="result-card"><div class="result-dim"><span class="dim-text">${queryText||wm.dim}</span><span class="badge found">${wm.clients.length} client${wm.clients.length>1?'s':''}</span></div><div class="result-body"><div style="font-size:12px;color:var(--orange);margin-bottom:12px;">↳ via ${wm.dim} (toutes séries)</div><ul class="client-list">${wm.clients.map(c => `<li class="client-item"><span class="client-check">✓</span><span class="client-name">${c}</span></li>`).join('')}</ul></div></div>`; return;
+  }
+  let suggestHTML = '';
+  if (suggestions && suggestions.length > 0) { suggestHTML = `<div class="suggestions"><h3>Dimensions proches</h3><div class="suggestion-chips">${suggestions.map(s => `<div class="chip" onclick="searchDimension('${s}')">${s}</div>`).join('')}</div></div>`; }
+  area.innerHTML = `<div class="result-card"><div class="result-dim"><span class="dim-text">${queryText||'???'}</span><span class="badge notfound">Aucun</span></div><div class="result-body"><div class="no-result"><div class="icon">✕</div><div class="msg">Personne ne prend cette dimension</div><div class="sub">Vérifier ou mettre en déchet</div></div>${suggestHTML}</div></div>`;
+}
+
+// ============ SPEECH SYNTHESIS ============
+function speak(text, isSystemMsg) {
+  if (!('speechSynthesis' in window)) { if (handsfreeContinuous) restartHandsfree(); return; }
+  window.speechSynthesis.cancel(); isSpeaking = true;
+  if (isListening) { try { recognition.stop(); } catch(e) {} isListening = false; }
+  if (handsfreeContinuous) { setMicState('handsfree-waiting'); setMicLabel('🔊 Réponse en cours...'); }
+  const utter = new SpeechSynthesisUtterance(text); utter.lang = 'fr-FR'; utter.rate = 1.1; utter.pitch = 1;
+  const voices = window.speechSynthesis.getVoices();
+  const frVoice = voices.find(v => v.lang.startsWith('fr'));
+  if (frVoice) utter.voice = frVoice;
+  utter.onend = () => { isSpeaking = false; if (handsfreeContinuous) restartHandsfree(); };
+  utter.onerror = () => { isSpeaking = false; if (handsfreeContinuous) restartHandsfree(); };
   window.speechSynthesis.speak(utter);
 }
-if('speechSynthesis' in window){speechSynthesis.onvoiceschanged=()=>speechSynthesis.getVoices();}
+if ('speechSynthesis' in window) { speechSynthesis.onvoiceschanged = () => speechSynthesis.getVoices(); }
 
-function addHistory(dim,found,nbClients){
-  history.unshift({dim,found,nbClients});if(history.length>15)history.pop();renderHistory();
+// ============ HISTORY ============
+function addHistory(dim, found, nbClients) {
+  history.unshift({ dim, found, nbClients }); if (history.length > 15) history.pop(); renderHistory();
 }
-function renderHistory(){
-  const section=document.getElementById('historySection'),list=document.getElementById('historyList');
-  if(history.length===0){section.style.display='none';return;}
-  section.style.display='block';
-  list.innerHTML=history.map(h=>`<li class="history-item" onclick="searchDimension('${h.dim}')"><span class="history-dim">${h.dim}</span><span class="history-result ${h.found?'yes':'no'}">${h.found?h.nbClients+' client'+(h.nbClients>1?'s':''):'Aucun'}</span></li>`).join('');
+function renderHistory() {
+  const section = document.getElementById('historySection'), list = document.getElementById('historyList');
+  if (history.length === 0) { section.style.display = 'none'; return; }
+  section.style.display = 'block';
+  list.innerHTML = history.map(h => `<li class="history-item" onclick="searchDimension('${h.dim}')"><span class="history-dim">${h.dim}</span><span class="history-result ${h.found?'yes':'no'}">${h.found ? h.nbClients+' client'+(h.nbClients>1?'s':'') : 'Aucun'}</span></li>`).join('');
 }
 
-document.getElementById('searchInput').addEventListener('keydown',(e)=>{if(e.key==='Enter')searchFromInput();});
+document.getElementById('searchInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') searchFromInput(); });
 
-let wakeLock=null;
-async function requestWakeLock(){try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}
-function releaseWakeLock(){if(wakeLock){wakeLock.release();wakeLock=null;}}
+let wakeLock = null;
+async function requestWakeLock() { try { if ('wakeLock' in navigator) wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {} }
+function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
 </script>
 </body>
 </html>
